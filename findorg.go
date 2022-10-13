@@ -1,80 +1,81 @@
 package main
 
 import (
-	"bufio"
     "fmt"
-    "os"
-    "os/user"
-    "strings"
-    "github.com/plar/go-adaptive-radix-tree"
-    "io/ioutil"
+    "github.com/reinhrst/fzf-lib"
     "encoding/json"
+    "os"
+    "path/filepath"
+    "os/user"
+    "io/ioutil"
+    "strings"
 )
 
+func getAsnDir() (string, error) {
+    usr, err := user.Current()
+    if err != nil {
+        return "", err
+    }
+    
+    return filepath.Join(usr.HomeDir, "asn"), nil
+}
 
+
+func findasn(findit,v string) {
+    dirAsn,_ := getAsnDir()
+
+    ipasnBytes, err := ioutil.ReadFile(dirAsn+"/IPASN.DAT")
+    if err != nil {
+        panic(err)
+    }
+
+    quotes := strings.Split(string(ipasnBytes), "\n")
+    
+    var options = fzf.DefaultOptions()
+  
+
+    var myFzf = fzf.New(quotes, options)
+    var result fzf.SearchResult
+    
+
+    myFzf.Search(fmt.Sprintf(" %s$",findit))
+    result = <- myFzf.GetResultChannel()
+        
+    for _, match := range result.Matches{
+        fmt.Println(match.Key,v)
+
+    }
+    
+    myFzf.End()
+    }
 
 func main() {
-	
+    dirAsn,_ := getAsnDir()
+    AsnJson, _ := os.Open(dirAsn+"/asn.json")
+    defer AsnJson.Close()
 
-	usr, _ := user.Current()
-    uhdir := usr.HomeDir
-	IPASN,_ := os.Open(uhdir+"/asn/IPASN.DAT")
-	defer IPASN.Close()
-
-	t  := art.New()
-
-	scanner := bufio.NewScanner(IPASN)
-	
-	
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), ";") == false {
-			words := strings.Fields(scanner.Text())
-
-			value, found := t.Search(art.Key(words[1])) 
-            
-            if found {
-            	newVal := fmt.Sprintf("%v,%s", value,words[0])
-            	t.Insert(art.Key(words[1]),newVal )
-			} else {
-				t.Insert(art.Key(words[1]), words[0])
-
-			}
-		}
-	}
-	
-
-	AsnJson, _ := os.Open(uhdir+"/asn/asn.json")
-	defer AsnJson.Close()
-
-   	byteAsnJson, _ := ioutil.ReadAll(AsnJson)
-
+    byteAsnJson, _ := ioutil.ReadAll(AsnJson)
     org := os.Args[1]
 
     var resAsnJson map[string]interface{}
-   	json.Unmarshal([]byte(byteAsnJson), &resAsnJson)
+    json.Unmarshal([]byte(byteAsnJson), &resAsnJson)
 
-   	for k,w :=range resAsnJson {
-   		switch v := w.(type) {
-		
-		case string:
-			fndwords := strings.Fields(strings.ToLower(v))
+    for findit, w := range resAsnJson {
+        switch v := w.(type) {
+        case string:
+            fndwords := strings.Fields(strings.ToLower(v))
 
-            for _,x := range fndwords {
+            for _, x := range fndwords {
 
-				if strings.HasPrefix(x, strings.ToLower(org)) {
+                if strings.HasPrefix(x, strings.ToLower(org)) {
 
-					value, found := t.Search(art.Key(string(k)))
-				    if found {
-				        fmt.Printf("\n# [AS%s] %s\n%v",string(k),v,value)
-				    }
-									
-				}
-			}
+                    findasn(findit,v)
 
-		
-		}
-   	
-        
-        	    
-}
+                }
+            }
+
+        }
+
+    }
+ 
 }
